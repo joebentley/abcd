@@ -10,3 +10,10 @@ To setup dev environment:
     $ source venv/bin/activate
     $ pip install -r requirements.txt
 
+TODO
+====
+
+* Measure transfer function of system in time domain
+* Check physical realizability conditions for system
+* Find physical realization from transfer function
+
