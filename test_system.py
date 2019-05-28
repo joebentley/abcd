@@ -217,3 +217,11 @@ def test_physical_realizability():
 
     assert not System(*numpy).is_physically_realizable
     assert System(*numpy_prime).is_physically_realizable
+
+    # TODO: test with symbolic variables
+    # testing with tuned cavity
+    gamma = sympy.symbols('gamma', real=True, positive=True)
+    eye = sympy.eye(2)
+
+    assert not System(-gamma*eye, eye, -2*gamma*eye, eye).is_physically_realizable
+    assert System(-gamma*eye, sympy.sqrt(2*gamma)*eye, -sympy.sqrt(2*gamma)*eye, eye).is_physically_realizable
