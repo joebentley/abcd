@@ -17,7 +17,7 @@ def test_instantiating_with_correct_type_does_not_raises_type_error():
     System(1, 2, 3, 4)
     mat = np.array([[1, 2], [3, 4]])
     sys = System(mat, mat, mat, mat)
-    assert not sys.isSymbolic
+    assert not sys.is_symbolic
     with pytest.raises(DimensionError):
         System(np.array(mat), 3, 2, 5)
     # testing symbolics
@@ -64,10 +64,10 @@ def test_instantiating_with_wrong_matrix_dimensions_raises_dimension_error():
 
 def test_instantiating_with_any_symbolic_variables_sets_symbolic_flag():
     sys = System(a, b, c)
-    assert sys.isSymbolic
+    assert sys.is_symbolic
     mat = sympy.Matrix([[1, 0], [0, 1]])
     sys = System(mat, mat, mat, mat)
-    assert sys.isSymbolic
+    assert sys.is_symbolic
     # inputs should not be set
     assert sys.inputs is None
 
@@ -138,5 +138,82 @@ def test_set_input_and_step_evolution_should_raise_type_error_if_symbolic():
     with pytest.raises(TypeError):
         sys.step_evolution(0)
 
-def test_j_matrix_as_expected():
-    pass
+
+def test_j_matrix_throws_error_if_there_are_not_pairs_of_states():
+    sys = System(a, b, c)
+    with pytest.raises(DimensionError):
+        sys.j_matrix
+    mat = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    sys = System(mat, mat, mat)
+    with pytest.raises(DimensionError):
+        sys.j_matrix
+
+
+def test_t_matrix_throws_error_if_there_are_not_pairs_of_inputs():
+    sys = System(a, b, c)
+    with pytest.raises(DimensionError):
+        sys.quantum_t_matrix
+    mat = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    sys = System(mat, mat, mat)
+    with pytest.raises(DimensionError):
+        sys.quantum_t_matrix
+
+
+def test_j_matrix_gives_correct_type_and_form():
+    mat = np.identity(2)
+    sys = System(mat, mat, mat)
+
+    j_mat = sys.j_matrix
+    assert isinstance(j_mat, np.ndarray)
+    assert np.array_equal(j_mat, np.diag([1, -1]))
+
+    mat = np.identity(4)
+    sys = System(mat, mat, mat)
+    assert np.array_equal(sys.j_matrix, np.diag([1, -1, 1, -1]))
+
+    mat = sympy.eye(4)
+    sys = System(mat, mat, mat, mat)
+    j_mat = sys.j_matrix
+    assert isinstance(j_mat, sympy.MatrixBase)
+    assert j_mat.equals(sympy.diag(*[1, -1, 1, -1]))
+
+
+def test_t_matrix_gives_correct_type_and_form():
+    mat = np.identity(2)
+    bmat = np.array([[1, 0, 1, 0], [0, 1, 0, 1]])
+    sys = System(mat, bmat, mat, bmat)
+
+    t_mat = sys.quantum_t_matrix
+    assert isinstance(t_mat, np.ndarray)
+    assert np.array_equal(t_mat, np.diag([1, -1, 1, -1]))
+
+    mat = sympy.Matrix(mat.tolist())
+    bmat = sympy.Matrix(bmat.tolist())
+    sys = System(mat, bmat, mat, bmat)
+
+    t_mat = sys.quantum_t_matrix
+    assert isinstance(t_mat, sympy.MatrixBase)
+    assert t_mat.equals(sympy.diag(*[1, -1, 1, -1]))
+
+
+def test_physical_realizability():
+    # this system is the unstable filter
+    a_mat = sympy.Matrix([[2, 0], [0, 2]])
+    b_mat = d_mat = sympy.eye(2)
+    c_mat = sympy.Matrix([[4, 0], [0, 4]])
+
+    a_mat_prime = sympy.Matrix([[2, 0], [0, 2]])
+    b_mat_prime = 2 * sympy.Matrix([[0, 1], [-1, 0]])
+    c_mat_prime = 2 * sympy.Matrix([[0, -1], [1, 0]])
+    d_mat_prime = d_mat
+
+    assert not System(a_mat, b_mat, c_mat, d_mat).is_physically_realizable
+    assert System(a_mat_prime, b_mat_prime, c_mat_prime, d_mat_prime).is_physically_realizable
+
+    # numpy
+    numpy = map(lambda m: sympy.matrix2numpy(m, dtype=float), [a_mat, b_mat, c_mat, d_mat])
+    numpy_prime = map(lambda m: sympy.matrix2numpy(m, dtype=float),
+                      [a_mat_prime, b_mat_prime, c_mat_prime, d_mat_prime])
+
+    assert not System(*numpy).is_physically_realizable
+    assert System(*numpy_prime).is_physically_realizable

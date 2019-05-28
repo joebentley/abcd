@@ -40,7 +40,7 @@ class System:
         A TypeError will be thrown if the parameters are anything except numbers, `np.ndarray`s,
         sympy.Expr, or sympy.MatrixBase
 
-        If any sympy elements are used, self.isSymbolic will be set, in which case set_input and step_evolution
+        If any sympy elements are used, self.is_symbolic will be set, in which case set_input and step_evolution
         will be disabled.
 
         A DimensionError will be thrown for all issues regarding the shapes of a, b, c, d.
@@ -57,7 +57,7 @@ class System:
             raise TypeError("a, b, c, d should be instances of np.array or Number")
 
         # if any of the a, b, c, d are sympy objects, then set this to a symbolic system
-        self.isSymbolic = any(map(lambda x: isinstance(x, sympy.Expr) or isinstance(x, sympy.MatrixBase), [a, b, c, d]))
+        self.is_symbolic = any(map(lambda x: isinstance(x, sympy.Expr) or isinstance(x, sympy.MatrixBase), [a, b, c, d]))
 
         # wrap numbers to become 1x1 matrices
         if isinstance(a, Number) or isinstance(a, sympy.Expr):
@@ -69,23 +69,23 @@ class System:
         if isinstance(d, Number) or isinstance(d, sympy.Expr):
             d = [[d]]
 
-        self.a = sympy.Matrix(a) if self.isSymbolic else np.array(a)
-        self.b = sympy.Matrix(b) if self.isSymbolic else np.array(b)
-        self.c = sympy.Matrix(c) if self.isSymbolic else np.array(c)
+        self.a = sympy.Matrix(a) if self.is_symbolic else np.array(a)
+        self.b = sympy.Matrix(b) if self.is_symbolic else np.array(b)
+        self.c = sympy.Matrix(c) if self.is_symbolic else np.array(c)
 
         # if no direct-feed matrix is given, then if number of inputs = number of outputs = n,
         # generate n x n identity, otherwise raise DimensionError
         if d is None:
             if self.num_outputs != self.num_inputs:
-                raise DimensionError("If no d matrix is given, need num_inputs = num_outputs"
+                raise DimensionError("If no d matrix is given, need num_inputs = num_outputs "
                                      "i.e. num cols in b = num rows in c")
-            d = sympy.Identity(self.num_outputs) if self.isSymbolic else np.identity(self.num_outputs)
+            d = sympy.Identity(self.num_outputs) if self.is_symbolic else np.identity(self.num_outputs)
 
-        self.d = sympy.Matrix(d) if self.isSymbolic else np.array(d)
+        self.d = sympy.Matrix(d) if self.is_symbolic else np.array(d)
         self.state = np.zeros((self.num_dof, 1))
 
         # set all inputs to (white-noise) Wiener processes if system is not symbolic
-        if not self.isSymbolic:
+        if not self.is_symbolic:
             self.inputs = []
             self.set_input(get_wiener_increment)
         else:
@@ -177,7 +177,7 @@ class System:
         If system is symbolic, raises TypeError.
         :param new_input_func: input function to replace all inputs with
         """
-        if self.isSymbolic:
+        if self.is_symbolic:
             raise TypeError("Systems with symbolic elements cannot undergo simulation via time evolution")
 
         self.inputs = [new_input_func for _ in range(self.num_inputs)]
@@ -191,7 +191,7 @@ class System:
         :return: the increment of the output for this step
         """
 
-        if self.isSymbolic:
+        if self.is_symbolic:
             raise TypeError("Systems with symbolic elements cannot undergo simulation via time evolution")
 
         if self._time is None:
@@ -210,24 +210,80 @@ class System:
         # input-output evolution
         return np.matmul(self.c, self.state) * dt + np.matmul(self.d, input_vector)
 
-    def get_j_matrix(self):
+    @property
+    def j_matrix(self):
         """
         Get the J matrix ("commutation matrix") for the system assuming the degrees of freedom are (self.num_dof / 2)
         quantum sideband operator pairs
 
-        If the number of
+        If self.num_dof is not a multiple of two, a DimensionError will be raised.
 
         :return: The J matrix for the system, used in the physical realizability condition
         """
-        pass
 
-    def get_quantum_t_matrix(self):
+        if self.num_dof % 2 != 0:
+            raise DimensionError("Quantum systems should have 2n internal states (dofs) where n > 0 is integer")
+
+        num_pairs = self.num_dof // 2
+        pairs = [1, -1] * num_pairs
+
+        return sympy.diag(*pairs) if self.is_symbolic else np.diag(pairs)
+
+    @property
+    def quantum_t_matrix(self):
         """
-        Get the Tw matrix for the system assuming the inputs are (self.num_inputs / 2) quantum sideband operator pairs
+        Get the Tw matrix for the system assuming _all_ inputs are (self.num_inputs / 2) quantum sideband operator pairs
         with the system having no classical inputs.
 
         For example, for self.num_inputs (= num b matrix columns) = 2, the input will be assumed to be the pair
         of operators (u, u*)
+
+        If self.num_inputs is not a multiple of two, a DimensionError will be raised.
+
         :return: The Tw matrix for the system, used in the physical realizability condition
         """
-        pass
+
+        if self.num_inputs % 2 != 0:
+            raise DimensionError("Quantum systems should have 2n input operators where n > 0 is integer")
+
+        num_pairs = self.num_inputs // 2
+        pairs = [1, -1] * num_pairs
+
+        return sympy.diag(*pairs) if self.is_symbolic else np.diag(pairs)
+
+    @property
+    def is_physically_realizable(self):
+        """
+        Return true if the system satisfies the physically realizability conditions, using the J and Tw matrices
+        given by self.j_matrix, and self.quantum_t_matrix respectively. The conditions are as follows,
+
+        $$
+        A J + J A^d + B Tw B^d = 0,
+        J C^d + B Tw D^d = 0
+        $$
+
+        where ^d denotes Hermitian conjugate
+
+        :return: whether or not the state-space is physically realizable
+        """
+
+        j = self.j_matrix
+        tw = self.quantum_t_matrix
+
+        if self.is_symbolic:
+            assert isinstance(self.a, sympy.MatrixBase)
+
+            cond1 = self.a * j + j * self.a.H + self.b * tw * self.b.H == sympy.zeros(*self.a.shape)
+            cond2 = j * self.c.H + self.b * tw * self.d.H == sympy.zeros(*(j * self.c.H).shape)
+
+        else:
+            assert isinstance(self.a, np.ndarray)
+
+            cond1 = np.array_equal(np.matmul(self.a, j) + np.matmul(j, self.a.conj().T)
+                                   + np.matmul(np.matmul(self.b, tw), self.b.conj().T),
+                                   np.zeros(np.matmul(self.a, j).shape))
+
+            cond2 = np.array_equal(np.matmul(j, self.c.conj().T) + np.matmul(np.matmul(self.b, tw), self.d.conj().T),
+                                   np.zeros(np.matmul(j, self.c.conj().T).shape))
+
+        return cond1 and cond2
