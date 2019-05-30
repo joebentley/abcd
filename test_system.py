@@ -26,6 +26,17 @@ def test_instantiating_with_correct_type_does_not_raises_type_error():
     System(mat, mat, mat, mat)
 
 
+def test_instantiating_with_matrix_containing_sympy_expressions_gives_expected_result():
+    # test with matrices with symbolic expressions
+    mat = sympy.Matrix([[a + b, b], [b, a - c]])
+    bmat = sympy.Matrix([[a/c], [b+a]])
+    sys = System(mat, bmat, bmat.T)
+
+    assert sys.a == mat
+    assert sys.b == bmat
+    assert sys.c == bmat.T
+
+
 def test_instantiating_with_correct_matrix_dimensions_does_not_raise_dimension_error():
     amat = np.array([[1, 2], [3, 4]])
     System(amat, amat, amat, amat)

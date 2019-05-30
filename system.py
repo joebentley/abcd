@@ -4,6 +4,7 @@ import sympy
 from numbers import Number
 import utils
 from inputs import get_wiener_increment
+import transfer_func
 
 
 class DimensionError(Exception):
@@ -59,19 +60,27 @@ class System:
         # if any of the a, b, c, d are sympy objects, then set this to a symbolic system
         self.is_symbolic = any(map(lambda x: isinstance(x, sympy.Expr) or isinstance(x, sympy.MatrixBase), [a, b, c, d]))
 
-        # wrap numbers to become 1x1 matrices
-        if isinstance(a, Number) or isinstance(a, sympy.Expr):
-            a = [[a]]
-        if isinstance(b, Number) or isinstance(b, sympy.Expr):
-            b = [[b]]
-        if isinstance(c, Number) or isinstance(c, sympy.Expr):
-            c = [[c]]
-        if isinstance(d, Number) or isinstance(d, sympy.Expr):
-            d = [[d]]
+        # for a given value, decides whether or not we should wrap it, if yes, wrap in appropriate 1x1 matrix object
+        def _wrap(value):
+            # don't wrap ndarrays, or sympy Matrices
+            # wrap Numbers or sympy Expressions (that aren't also sympy Matrices)
+            should_wrap = (not (isinstance(value, sympy.MatrixBase) and not isinstance(value, np.ndarray))
+                           and (isinstance(value, Number) or isinstance(value, sympy.Expr)))
 
-        self.a = sympy.Matrix(a) if self.is_symbolic else np.array(a)
-        self.b = sympy.Matrix(b) if self.is_symbolic else np.array(b)
-        self.c = sympy.Matrix(c) if self.is_symbolic else np.array(c)
+            if not should_wrap:
+                return value
+
+            value = [[value]]
+            return sympy.Matrix(value) if self.is_symbolic else np.array(value)
+
+        a = _wrap(a)
+        b = _wrap(b)
+        c = _wrap(c)
+        d = _wrap(d)
+
+        self.a = a
+        self.b = b
+        self.c = c
 
         # if no direct-feed matrix is given, then if number of inputs = number of outputs = n,
         # generate n x n identity, otherwise raise DimensionError
@@ -81,7 +90,7 @@ class System:
                                      "i.e. num cols in b = num rows in c")
             d = sympy.Identity(self.num_outputs) if self.is_symbolic else np.identity(self.num_outputs)
 
-        self.d = sympy.Matrix(d) if self.is_symbolic else np.array(d)
+        self.d = d
         self.state = np.zeros((self.num_dof, 1))
 
         # set all inputs to (white-noise) Wiener processes if system is not symbolic
@@ -287,3 +296,48 @@ class System:
                                    np.zeros(np.matmul(j, self.c.conj().T).shape))
 
         return cond1 and cond2
+
+    @property
+    def siso_transfer_function(self):
+        """
+        Return the PolyTransferFunc if system is symbolic and assuming a single-input, single-output (SISO) system
+
+        Will raise DimensionError if system is not SISO
+        Will raise TypeError if system is not symbolic
+
+        TODO: handle quantum system with 1-input 1-output
+        :return: the calculated transfer function
+        """
+
+        if not self.is_symbolic:
+            raise TypeError("Symbolic transfer functions can only be computed for symbolic systems")
+        if not (self.num_outputs == 1 and self.num_inputs == 1):
+            raise DimensionError("This function can only be used on SISO systems")
+
+        s = sympy.symbols('s')
+        tf = self.c * (s * sympy.eye(self.num_dof) - self.a)**-1 * self.b + self.d
+
+        # TODO: remove slow simplify
+        return sympy.simplify(tf[0])
+
+    def pprint(self, use_unicode=False):
+        if self.is_symbolic:
+            # sympy.init_printing()
+
+            print()
+            sympy.pprint(self.a, use_unicode=False)
+            print()
+            sympy.pprint(self.b, use_unicode=False)
+            print()
+            sympy.pprint(self.c, use_unicode=False)
+            print()
+            sympy.pprint(self.d, use_unicode=False)
+            print()
+
+            # displaying as a state-space equation is not working
+            # dx, dt, x, y, u = sympy.symbols('dx dt x y u')
+            # Add, Mul, UnevaluatedExpr = sympy.Add, sympy.Mul, sympy.UnevaluatedExpr
+            # print(sympy.Eq(dx/dt, UnevaluatedExpr(Add(Mul(self.a, x), Mul(self.b, u)))))
+            # print(sympy.Eq(y, UnevaluatedExpr(Add(Mul(self.c, x), Mul(self.d, u)))))
+        else:
+            raise TypeError("Pretty printing only available for symbolic state spaces")
