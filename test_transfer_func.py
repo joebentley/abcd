@@ -46,7 +46,7 @@ def test_controllable_canonical_form_gives_expected_state_space():
     assert state_space.siso_transfer_function.equals(tf_2dof)
 
 
-def test_ccf_for_the_coupled_cavity_transfer_function():
+def test_ccf_for_the_coupled_cavity_transfer_function(run_slow):
     s = sympy.symbols("s")
     omega_s, Omega, tau_1, gamma_1, gamma_1_prime =\
         sympy.symbols("omega_s Omega tau_1 gamma_1 gamma_1'", real=True, positive=True)
@@ -73,7 +73,9 @@ def test_ccf_for_the_coupled_cavity_transfer_function():
     assert ss.c == sympy.Matrix([[0, 2 * prefactor]])
     assert ss.d == sympy.Matrix([[-1]])
 
-    assert sympy.simplify(ss.siso_transfer_function.subs(s, I * Omega / omega_s) - tf) == 0
-    assert sympy.simplify(ss.siso_transfer_function - tf_normalized_freq) == 0
-    assert PolyTransferFunc.from_transfer_function(ss.siso_transfer_function, s) == poly_tf
+    # the simplifications make these tasks pretty slow
+    if run_slow:
+        assert sympy.simplify(ss.siso_transfer_function.subs(s, I * Omega / omega_s) - tf) == 0
+        assert sympy.simplify(ss.siso_transfer_function - tf_normalized_freq) == 0
+        assert PolyTransferFunc.from_transfer_function(ss.siso_transfer_function, s) == poly_tf
 
