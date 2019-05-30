@@ -3,7 +3,10 @@ import system
 
 
 class PolyTransferFunc:
-    def __init__(self, numer_poly, denom_poly):
+    """ Represents a transfer function as a fraction of two polynomials. """
+
+    def __init__(self, numer_poly: sympy.Poly, denom_poly: sympy.Poly):
+        """ Construct a new transfer function from the given polynomials. """
         if not (isinstance(numer_poly, sympy.Poly) and isinstance(denom_poly, sympy.Poly)):
             raise TypeError("arguments must be sympy Poly objects")
 
@@ -11,7 +14,14 @@ class PolyTransferFunc:
         self.denom = denom_poly
 
     @classmethod
-    def from_transfer_function(cls, expr, s):
+    def from_transfer_function(cls, expr: sympy.Expr, s: sympy.Symbol):
+        """
+        Construct a transfer function from the given expression with s being a normalized frequency variable.
+        :param expr: the expr to be turned into a transfer function. Should be the ratio of two polynomials.
+        :param s: the normalized frequency variable used in expr
+        :return:
+        """
+
         if not isinstance(expr, sympy.Expr):
             raise TypeError("expr must be a sympy expression")
         if not isinstance(s, sympy.Symbol):
@@ -23,17 +33,20 @@ class PolyTransferFunc:
 
     @property
     def numer_coeffs(self):
+        """ Return the coefficients of all the terms on the numerator, highest order first. """
         return self.numer.all_coeffs()
 
     @property
     def denom_coeffs(self):
+        """ Return the coefficients of all the terms on the denominator, highest order first. """
         return self.denom.all_coeffs()
 
     @property
-    def as_ccf_state_space(self):
+    def as_ccf_state_space(self) -> system.System:
         """
-        Convert to SISO state-space representation in Controllable Canonical Form
-        :return: a System which represents the transfer function
+        Convert to a SISO state-space representation in Controllable Canonical Form
+        TODO: support multiple transfer functions, or transfer functions between two ladder operators
+        :return: a time-domain System which represents the transfer function
         """
         n_dof = max(self.numer.degree(), self.denom.degree())
 
@@ -41,10 +54,6 @@ class PolyTransferFunc:
 
         b = self.numer_coeffs  # b[i] are the coefficients of the terms on the numerator
         a = self.denom_coeffs  # a[i] are the coefficients of the terms on the denominator
-
-        # # simplify all the coefficients (TODO: slow)
-        # b = list(map(sympy.simplify, b))
-        # a = list(map(sympy.simplify, a))
 
         # pad from left with zeroes
         a = [0] * (n_dof - len(a)) + a
@@ -90,14 +99,15 @@ class PolyTransferFunc:
         return system.System(a_mat, b_mat, c_mat, d_mat)
 
     @property
-    def expr(self):
+    def expr(self) -> sympy.Expr:
+        """ Divide and return the numerator and denominator as a single expression """
         return self.numer / self.denom
 
     def __str__(self):
         return str(self.expr)
 
     def equals(self, other):
-        # print(sympy.simplify(self.expr - other.expr))
+        """ Apply sympy.simplify to work out whether the two expressions are equal """
         return sympy.simplify(self.expr - other.expr) == 0
 
     def __eq__(self, other):

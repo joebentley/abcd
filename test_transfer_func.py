@@ -47,6 +47,8 @@ def test_controllable_canonical_form_gives_expected_state_space():
 
 
 def test_ccf_for_the_coupled_cavity_transfer_function(run_slow):
+    """ This is to test using the work being done locally in coupled-cavity.nb """
+
     s = sympy.symbols("s")
     omega_s, Omega, tau_1, gamma_1, gamma_1_prime =\
         sympy.symbols("omega_s Omega tau_1 gamma_1 gamma_1'", real=True, positive=True)

@@ -298,14 +298,14 @@ class System:
         return cond1 and cond2
 
     @property
-    def siso_transfer_function(self):
+    def siso_transfer_function(self) -> sympy.Expr:
         """
-        Return the PolyTransferFunc if system is symbolic and assuming a single-input, single-output (SISO) system
+        Return the transfer function if the system is symbolic and assuming a single-input, single-output (SISO) system
 
         Will raise DimensionError if system is not SISO
         Will raise TypeError if system is not symbolic
 
-        TODO: handle quantum system with 1-input 1-output
+        TODO: handle quantum system with 1-input 1-output, currently only does classical systems
         :return: the calculated transfer function
         """
 
@@ -321,6 +321,7 @@ class System:
         return sympy.simplify(tf[0])
 
     def pprint(self, use_unicode=False):
+        """ If symbolic, pretty print all the matrices. """
         if self.is_symbolic:
             # sympy.init_printing()
 
